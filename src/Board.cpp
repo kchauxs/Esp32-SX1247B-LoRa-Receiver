@@ -52,6 +52,31 @@ float Board::getUsedRam()
     return ((float)(totalMem - freeMem) / totalMem) * 100.0;
 }
 
+bool Board::connectToWiFi(String ssid, String pass)
+{
+    if (ssid.isEmpty() || pass.isEmpty())
+        return false;
+
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid.c_str(), pass.c_str());
+
+    byte attempt = 0;
+    bool ledState = false;
+
+    DEBUG_PRINTLN("Conectando a WiFi: " + ssid);
+    while (WiFi.status() != WL_CONNECTED && attempt < 40)
+    {
+        attempt++;
+        ledState = !ledState;
+        digitalWrite(LED_BUILTIN, ledState);
+        delay(500);
+    }
+
+    digitalWrite(LED_BUILTIN, LOW);
+    DEBUG_PRINTLN(String(this->isConnectedToWiFi() ? "EXITO" : "FALLO"));
+    return this->isConnectedToWiFi();
+}
+
 int Board::getRSSIasQuality()
 {
     if (!isConnectedToWiFi())

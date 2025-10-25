@@ -22,8 +22,8 @@
 //----------------------------------------------
 // PORTAL CONFIG
 //----------------------------------------------
+#define DEFAULT_PORTAL_NAME "LoRa-Gateway"
 #define DEFAULT_PORTAL_PASSWORD "12345678"
-#define DEFAULT_PORTAL_NAME "LoRa-Gatewa"
 
 //----------------------------------------------
 // TASK

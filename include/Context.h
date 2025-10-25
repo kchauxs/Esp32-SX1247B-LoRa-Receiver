@@ -86,6 +86,10 @@ public:
 
     String deviceID = "";
 
+    // WIFI
+    String WiFiSSID = "";
+    String WiFiPass = "";
+
     // MQTT
     MqttStatus mqttStatus = MqttStatus::DISCONNECTED;
 

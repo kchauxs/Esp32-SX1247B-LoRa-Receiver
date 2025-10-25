@@ -1,19 +1,20 @@
 #include <Arduino.h>
 #include <WiFi.h>
 #include <SPI.h>
+
 #include <LoRa.h>
 #include <ArduinoJson.h>
-#include <AutoConnect.h>
 #include <TaskScheduler.h>
+#include <WiFiManager.h>
 
 #include "Config.h"
 #include "Context.h"
 #include "MqttService.h"
 #include "Board.h"
+#include "Storage.h"
 
+WiFiManager wm;
 Scheduler runner;
-WebServer server;
-AutoConnect portal(server);
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);
 
@@ -22,6 +23,7 @@ Context Context::instance;
 Context &ctx = Context::getInstance();
 
 Board board(&ctx);
+Storage storage(&ctx);
 MqttService service(&mqttClient, &ctx);
 
 #include "Task.hpp"
@@ -35,17 +37,32 @@ void setup()
   while (!Serial)
     ;
 
-  pinMode(LED_BUILTIN, OUTPUT);
+  board.initNativeLed();
+  board.initButton();
   ctx.deviceID = board.getIdUnique();
   //------------------------------------------------------------------
   // LORA INIT
   //------------------------------------------------------------------
-  initLoRa();
+  handleInitLoRa();
 
   //------------------------------------------------------------------
   // PORTAL AUTO CONNECT
   //------------------------------------------------------------------
-  initPortalAutoConnect();
+  if (digitalRead(PIN_BUTTON) == LOW)
+  {
+    handleInitPortal();
+    storage.save();
+    board.restartDevice();
+    return;
+  }
+  else
+  {
+    storage.read();
+    storage.printDebug();
+    board.connectToWiFi(ctx.WiFiSSID.c_str(), ctx.WiFiPass.c_str());
+    wm.~WiFiManager();
+    delay(10);
+  }
 
   //------------------------------------------------------------------
   // MQTT INIT
@@ -55,37 +72,34 @@ void setup()
   //------------------------------------------------------------------
   // TASK
   //------------------------------------------------------------------
-  //   runner.init();
-  //   runner.addTask(taskUpdateInfo);
-  // #if SERIAL_DEBUG
-  //   runner.addTask(taskLogs);
-  //   taskLogs.enable();
-  // #endif
-  //   taskUpdateInfo.enable();
+  runner.init();
+  runner.addTask(taskUpdateInfo);
+#if SERIAL_DEBUG
+  runner.addTask(taskLogs);
+  taskLogs.enable();
+#endif
+  taskUpdateInfo.enable();
 }
 
 void loop()
 {
   handleLoRaBridge();
 
-  // runner.execute();
-  portal.handleClient();
+  runner.execute();
   service.mqttLoop(
       []()
       {
-        //         taskUpdateInfo.disable();
-        // #if SERIAL_DEBUG
-        //         taskLogs.disable();
-        // #endif
-        //         runner.execute();
+        taskUpdateInfo.disable();
+#if SERIAL_DEBUG
+        taskLogs.disable();
+#endif
+        runner.execute();
       },
       []()
       {
-        //         taskUpdateInfo.enable();
-        // #if SERIAL_DEBUG
-        //         taskLogs.enable();
-        // #endif
+        taskUpdateInfo.enable();
+#if SERIAL_DEBUG
+        taskLogs.enable();
+#endif
       });
-  // taskCallbackLogs();
-  // taskCallbackUpdateInfo();
 }

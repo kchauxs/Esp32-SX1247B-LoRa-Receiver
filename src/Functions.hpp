@@ -1,5 +1,5 @@
 #include <ArduinoJson.h>
-#include <AutoConnect.h>
+#include <WiFiManager.h>
 
 #include "Config.h"
 #include "Context.h"
@@ -44,7 +44,7 @@ void handleMqttConnection()
     ctx.mqttStatus = MqttStatus::CONNECTING;
 }
 
-void initLoRa()
+void handleInitLoRa()
 {
     LoRa.setPins(LORA_SS, LORA_RST, LORA_DIO0);
     Serial.println("Iniciando receptor Heltec LoRa V2...");
@@ -64,50 +64,47 @@ void initLoRa()
     Serial.println("✅ Receptor listo. Esperando mensajes...");
 }
 
-void initPortalAutoConnect()
+void handleInitPortal()
 {
-    // --- Configurar AutoConnect ---
-    AutoConnectConfig config;
+    digitalWrite(LED_BUILTIN, HIGH);
+    DEBUG_PRINTLN("\nIniciando portal de configuración WiFi...");
 
-    // config.portalTimeout = 30000; // 30 segundos
-    // config.retainPortal = true;
+    WiFi.mode(WIFI_STA);
+    delay(1000);
 
-    config.apid = DEFAULT_PORTAL_NAME;    // SSID del portal cautivo
-    config.psk = DEFAULT_PORTAL_PASSWORD; // Contraseña del portal cautivo
-    config.autoRise = true;               // Levanta el portal automáticamente si no hay WiFi
-    config.title = "Configuración WiFi";
+    std::vector<const char *> menu = {"wifi", "wifinoscan", "restart", "exit"};
 
-    // Configuración de reconexión automática
-    config.autoReconnect = true;  // 🔄 Reconexión automática
-    config.reconnectInterval = 6; // Intervalo de reintento en segundos
-    portal.config(config);
+    wm.setMenu(menu);
+    wm.setDebugOutput(SERIAL_DEBUG);
 
-    // --- Iniciar el portal ---
-    Serial.println("Iniciando AutoConnect...");
-    if (portal.begin())
+    wm.setTitle("Configuración WiFi");
+    wm.setDarkMode(true);
+
+    if (wm.startConfigPortal(DEFAULT_PORTAL_NAME, DEFAULT_PORTAL_PASSWORD))
     {
-        Serial.println("✅ Conectado a WiFi correctamente.");
-        Serial.print("SSID: ");
-        Serial.println(WiFi.SSID());
-        Serial.print("IP: ");
-        Serial.println(WiFi.localIP());
+        DEBUG_PRINTLN("Portal de configuracion finalizado ✅");
     }
-    else
-    {
-        Serial.println("❌ No se pudo conectar a WiFi.");
-    }
+
+    ctx.WiFiSSID = wm.getWiFiSSID();
+    ctx.WiFiPass = wm.getWiFiPass();
+
+    DEBUG_PRINTLN("\nInformación de WiFi guardada:");
+    DEBUG_PRINTLN(" - SSID: " + ctx.WiFiSSID);
+    DEBUG_PRINTLN(" - PASS: " + ctx.WiFiPass);
+
+    wm.stopConfigPortal();
+    wm.disconnect();
+    digitalWrite(LED_BUILTIN, LOW);
 }
 
 String csvToJson(const String &csvData)
 {
-    // Dividir el string por comas
     int size = 14;
-    String parts[size]; // Array para almacenar los 13 campos
     int partIndex = 0;
-    String currentPart = "";
     bool inQuotes = false;
+    String parts[size];
+    String currentPart = "";
 
-    // Parsear considerando que puede haber comas en los textos
     for (size_t i = 0; i < csvData.length(); i++)
     {
         char c = csvData.charAt(i);
@@ -130,16 +127,13 @@ String csvToJson(const String &csvData)
         }
     }
 
-    // Agregar la última parte
     if (partIndex < size)
     {
         parts[partIndex] = currentPart;
     }
 
-    // Crear JSON
     JsonDocument jsonDoc;
 
-    // Asignar campos con nombres cortos
     jsonDoc["ts"] = parts[0].toInt();    // timestamp
     jsonDoc["ent"] = parts[1];           // empresa
     jsonDoc["mat"] = parts[2];           // material
@@ -155,8 +149,8 @@ String csvToJson(const String &csvData)
     jsonDoc["obs"] = parts[12];          // observaciones
 
     String output;
-    JsonObject deviceJson = jsonDoc["device"].to<JsonObject>(); // jsonDoc["id"] = parts[13];           // identificador
-    deviceJson["id"] = ctx.deviceID;
+    JsonObject deviceJson = jsonDoc["device"].to<JsonObject>();
+    deviceJson["id"] = ctx.deviceID; // dispositivo;
     deviceJson["from"] = parts[13];
     deviceJson["tx"] = "LoRa";
     deviceJson["rssi"] = ctx.lastPacketRssi;

@@ -29,6 +29,7 @@ public:
     unsigned long getUptimeInSeconds();
     void restartDevice(int waitTime = 3300);
 
+    bool connectToWiFi(String ssid, String pass);
     bool isConnectedToWiFi();
     int getRSSIasQuality();
     void updateInfo();
